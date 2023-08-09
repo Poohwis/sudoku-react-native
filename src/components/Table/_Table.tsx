@@ -29,7 +29,7 @@ interface Store {
 }
 
 const TABLE_COLUMNS = 9;
-const temp = TEMP[0].quiz;
+const temp = TEMP[0].puzzle;
 
 export function Table() {
   const cellSize = useRef<CellSize>();
