@@ -17,6 +17,7 @@ import {
 
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Numpad from "./numpad";
+import Note from "./note";
 
 interface CellSize {
   height: number;
@@ -46,22 +47,32 @@ interface GridProps {
 
 export function Grid({ data }: GridProps) {
   const { puzzle, solution } = data;
+  const cellSize = useRef<CellSize>();
   const initialGrid = [...puzzle.map((row) => [...row])];
   const isForInput = initialGrid.map((row) => row.map((cell) => cell === 0));
-  const [currentValue, setCurrentValue] = useState<number[][]>(initialGrid);
+  const [currentGrid, setCurrentGrid] = useState<number[][]>(initialGrid);
   const [selectCell, setSelectCell] = useState<SelectCell>();
-  const cellSize = useRef<CellSize>();
+  const noteObj = Object.fromEntries(
+    Array.from({ length: 10 }, (_, index) => [index, false])
+  );
+  const noteArray = new Array(9).fill(0).map(() => new Array(9).fill(noteObj));
+  const [currentNote, setCurrentNote] = useState<number[][]>(noteArray);
+  const [isNoteMode, setIsNoteMode] = useState<boolean>(false);
 
   const handleInputNumber = (
     target: { row: number; col: number },
     num: number
   ) => {
     if (target !== undefined && isForInput[target.row][target.col]) {
-      const updatedValue = [...currentValue.map((row) => [...row])];
+      const updatedValue = [...currentGrid.map((row) => [...row])];
       updatedValue[target.row][target.col] = num;
-      setCurrentValue(updatedValue);
+      setCurrentGrid(updatedValue);
       setSelectCell({ row: target.row, col: target.col, value: num });
     }
+  };
+
+  const handleNoteModeToggle = () => {
+    setIsNoteMode(!isNoteMode);
   };
 
   const handleSelection = useCallback(
@@ -77,7 +88,7 @@ export function Grid({ data }: GridProps) {
       const targetRow = Math.min(Math.max(Math.floor(y / cellHeight), 0), 8);
       const cellNumber = currentValue[targetRow][targetCol];
       const result = { row: targetRow, col: targetCol, value: cellNumber };
-      // console.log(currentValue[8])
+
       return result;
     },
     []
@@ -87,14 +98,14 @@ export function Grid({ data }: GridProps) {
     () =>
       Gesture.Pan()
         .onBegin(({ x, y }: Coordinates) => {
-          const value = handleSelection({ x, y }, currentValue);
+          const value = handleSelection({ x, y }, currentGrid);
           setSelectCell(value);
         })
         .onChange(({ x, y }: Coordinates) => {
-          const value = handleSelection({ x, y }, currentValue);
+          const value = handleSelection({ x, y }, currentGrid);
           setSelectCell(value);
         }),
-    [selectCell, handleSelection, currentValue]
+    [selectCell, handleSelection, currentGrid]
   );
 
   const onLayout = useCallback(
@@ -138,7 +149,6 @@ export function Grid({ data }: GridProps) {
           (select.value === cell && cell !== 0 && select.row === index) ||
           (select.value === cell && cell !== 0 && select.col === colIndex),
       };
-      // console.log(selectCell)
       const hilightStyle = {
         backgroundColor: hilightPattern.isCurrCell
           ? "#044289"
@@ -168,10 +178,10 @@ export function Grid({ data }: GridProps) {
     };
     const textStyle = {
       color: textPattern.isFixNumber
-        // ? textPattern.isValid
-          ? "teal"
-          // : "red"
-        : "#979797",
+        ? // ? textPattern.isValid
+          "teal"
+        : // : "red"
+          "#979797",
     };
     return textStyle;
   };
@@ -181,7 +191,7 @@ export function Grid({ data }: GridProps) {
       <GestureDetector gesture={gesture}>
         <FlatList
           style={styles.table}
-          data={currentValue}
+          data={currentGrid}
           keyExtractor={(_, i) => i.toString()}
           scrollEnabled={false}
           renderItem={({ item, index }) => {
@@ -202,14 +212,19 @@ export function Grid({ data }: GridProps) {
                         getCellHilightStyle(selectCell, index, colIndex, cell),
                       ]}
                     >
-                      <Text
-                        style={[
-                          styles.numberText,
-                          getNumberTextStyle(index, colIndex, cell),
-                        ]}
-                      >
-                        {cell === 0 ? "" : cell}
-                      </Text>
+                      {colIndex === 2 && index === 0 ? (
+                      // <View style={{width: CELL_WIDTH, height:CELL_HEIGHT, backgroundColor: 'red'}}> </View>
+                      <Note currentNote={currentNote}/>
+                      ) : (
+                        <Text
+                          style={[
+                            styles.numberText,
+                            getNumberTextStyle(index, colIndex, cell),
+                          ]}
+                        >
+                          {cell === 0 ? "" : cell}
+                        </Text>
+                      )}
                     </View>
                   );
                 })}
@@ -218,40 +233,48 @@ export function Grid({ data }: GridProps) {
           }}
         />
       </GestureDetector>
-      <Numpad handleInputNumber={handleInputNumber} selectCell={selectCell} />
-      <TouchableOpacity
-        style={styles.testButton}
-        onPress={() => {
-          const deepCopy = puzzle.map((row) => [...row]);
-          setCurrentValue(deepCopy);
-        }}
-      >
-        <Text>Reset</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.testButton}
-        onPress={() => {
-          const deepCopy = solution.map((row) => [...row]);
-          setCurrentValue(deepCopy);
-        }}
-      >
-        <Text>Solution</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.testButton}
-        onPress={() => {
-          console.log("curr:", currentValue[8]);
-        }}
-      >
-        <Text>Print</Text>
-      </TouchableOpacity>
+      <Numpad
+        handleInputNumber={handleInputNumber}
+        selectCell={selectCell}
+        handleNoteModeToggle={handleNoteModeToggle}
+        isNoteMode={isNoteMode}
+      />
+      <View style={{ flexDirection: "row" }}>
+        <TouchableOpacity
+          style={styles.testButton}
+          onPress={() => {
+            const deepCopy = puzzle.map((row) => [...row]);
+            setCurrentGrid(deepCopy);
+          }}
+        >
+          <Text>Reset</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.testButton}
+          onPress={() => {
+            const deepCopy = solution.map((row) => [...row]);
+            setCurrentGrid(deepCopy);
+          }}
+        >
+          <Text>Solution</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.testButton}
+          onPress={() => {
+            console.log("curr:", currentGrid[8]);
+          }}
+        >
+          <Text>Print</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   ); //
 }
 
 const TABLE_COLUMNS = 9;
 const { width: SCREEN_WIDTH } = Dimensions.get("screen");
-const CELL_WIDTH = Math.floor((SCREEN_WIDTH / TABLE_COLUMNS) * 0.99);
-const CELL_HEIGHT = CELL_WIDTH;
+export const CELL_WIDTH = Math.floor((SCREEN_WIDTH / TABLE_COLUMNS) * 0.99);
+export const CELL_HEIGHT = CELL_WIDTH;
 
 const styles = StyleSheet.create({
   container: {
@@ -273,11 +296,12 @@ const styles = StyleSheet.create({
   },
   numberText: {
     fontSize: 26,
-    // color: "#979797",
   },
   testButton: {
-    marginBottom: 5,
+    marginHorizontal: 10,
     paddingVertical: 5,
+    paddingHorizontal: 5,
     backgroundColor: "white",
+    borderRadius: 8,
   },
 });
