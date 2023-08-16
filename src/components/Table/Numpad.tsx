@@ -1,25 +1,23 @@
+import { useCallback, memo } from "react";
 import { Pressable, Text, TouchableOpacity, View } from "react-native";
 import { SelectCell } from "./grid";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-interface NumpadProps {
-  handleInputNumber: (
-    target: { row: number; col: number },
-    num: number
-  ) => void;
-  selectCell: SelectCell | undefined;
+interface NumpadComponentProps {
   handleNoteModeToggle: () => void;
   isNoteMode: boolean;
+  setPad: (num: number)=> void
 }
 // style on this page is still messed up
-export default function Numpad({
-  handleInputNumber,
-  selectCell,
+function NumPadComponent({
   handleNoteModeToggle,
   isNoteMode,
-}: NumpadProps) {
+  setPad,
+}: NumpadComponentProps) {
   const digits = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  console.log('re-rendered: NumPad')
+
   return (
-    <View>
+    <>
       <View
         style={{ marginTop: 10, flexDirection: "row", alignItems: "center" }}
       >
@@ -28,7 +26,8 @@ export default function Numpad({
             key={digit}
             style={{ paddingHorizontal: 7, margin: 4 }}
             onPress={() => {
-              selectCell && handleInputNumber(selectCell, digit);
+              console.log("pressed:",digit)
+              setPad(digit)
             }}
           >
             <Text style={{ fontSize: 26, fontWeight: "bold", color: "gray" }}>
@@ -39,14 +38,14 @@ export default function Numpad({
       </View>
       <View
         style={{
+          // backgroundColor: 'red',
           flexDirection: "row",
-          justifyContent: "space-evenly",
-          marginBottom: 10,
         }}
       >
         <TouchableOpacity
           onPress={() => {
-            selectCell && handleInputNumber(selectCell, 0);
+            console.log("pressed: 0")
+            setPad(0)
           }}
         >
           <MaterialCommunityIcons name="eraser" size={24} color="gray" />
@@ -54,28 +53,32 @@ export default function Numpad({
         <View>
           <TouchableOpacity onPress={() => handleNoteModeToggle()}>
             <MaterialCommunityIcons name="pencil" size={24} color="gray" />
+            {/* may add interpolate of on/off sliding in and out */}
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: isNoteMode ? "#044289" : "#262626",
+                width: 18,
+                height: 12,
+                position: "absolute",
+                borderRadius: 8,
+                right: -4,
+                bottom: -4,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{ fontSize: 7, textAlign: "center", color: "#979797" }}
+              >
+                {isNoteMode ? "ON" : "OFF"}
+              </Text>
+            </View>
           </TouchableOpacity>
-          <Text
-            style={{
-              fontSize: 6,
-              color: "#ffffff",
-              textAlign: "center",
-              position: "absolute",
-              backgroundColor: isNoteMode ? "teal" : "#262626",
-              right: -3,
-              bottom: -4,
-              borderRadius: 8,
-              paddingHorizontal: 4,
-              paddingVertical: 3,
-              borderColor: "#141414",
-              borderWidth: 1,
-              textAlignVertical: "center",
-            }}
-          >
-            {isNoteMode ? "ON" : "OFF"}
-          </Text>
         </View>
       </View>
-    </View>
+    </>
   );
 }
+
+export const NumPad = memo(NumPadComponent)
