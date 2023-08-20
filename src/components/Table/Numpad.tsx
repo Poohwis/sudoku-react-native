@@ -1,6 +1,5 @@
-import { useCallback, memo } from "react";
-import { Pressable, Text, TouchableOpacity, View } from "react-native";
-import { SelectCell } from "./grid";
+import { memo } from "react";
+import { Text, TouchableOpacity, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 interface NumpadComponentProps {
   handleNoteModeToggle: () => void;
@@ -17,34 +16,35 @@ function NumPadComponent({
   console.log('re-rendered: NumPad')
 
   return (
-    <>
+    <View style={{flex : 0.2, backgroundColor: '#141414'}}>
       <View
-        style={{ marginTop: 10, flexDirection: "row", alignItems: "center" }}
+        style={{ marginTop: 10, flexDirection: "row", justifyContent: "center", alignItems: "center" }}
       >
         {digits.map((digit) => (
-          <Pressable
+          <TouchableOpacity
             key={digit}
             style={{ paddingHorizontal: 7, margin: 4 }}
             onPress={() => {
-              console.log("pressed:",digit)
+              // console.log("pressed:",digit)
               setPad(digit)
             }}
           >
             <Text style={{ fontSize: 26, fontWeight: "bold", color: "gray" }}>
               {digit}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         ))}
       </View>
       <View
         style={{
-          // backgroundColor: 'red',
           flexDirection: "row",
+          justifyContent: "space-evenly",
+          
         }}
       >
         <TouchableOpacity
           onPress={() => {
-            console.log("pressed: 0")
+            // console.log("pressed: 0")
             setPad(0)
           }}
         >
@@ -77,7 +77,7 @@ function NumPadComponent({
           </TouchableOpacity>
         </View>
       </View>
-    </>
+    </View>
   );
 }
 

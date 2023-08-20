@@ -12,11 +12,11 @@ import {
   StyleSheet,
   Dimensions,
   Text,
-  TouchableOpacity,
 } from "react-native";
 
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { NumPad } from "./numpad";
+import { NoteGrid } from "./notegrid";
 
 interface CellSize {
   height: number;
@@ -47,56 +47,56 @@ interface GridProps {
 const TABLE_COLUMNS = 9;
 const { width: SCREEN_WIDTH } = Dimensions.get("screen");
 const CELL_RATIO = 0.99;
-const CELL_WIDTH = Math.floor((SCREEN_WIDTH / TABLE_COLUMNS) * CELL_RATIO);
-const CELL_HEIGHT = CELL_WIDTH;
+export const CELL_SIDE = Math.floor(
+  (SCREEN_WIDTH / TABLE_COLUMNS) * CELL_RATIO
+);
 
 export function Grid({ data }: GridProps) {
   const { puzzle, solution } = data;
   const cellSize = useRef<CellSize>();
   const initialGrid = [...puzzle.map((row) => [...row])];
   const isForInput = initialGrid.map((row) => row.map((cell) => cell === 0));
-  const [currentGrid, setCurrentGrid] = useState<number[][]>(initialGrid);
+  const [currentFill, setCurrentFill] = useState<number[][]>(initialGrid);
   const [selectCell, setSelectCell] = useState<SelectCell>();
-  const noteObj = {
-    1: false,
-    2: false,
-    3: false,
-    4: false,
-    5: false,
-    6: false,
-    7: false,
-    8: false,
-    9: false,
-  };
+  const noteObj = Object.fromEntries(
+    Array.from({ length: 9 }, (_, index) => [index + 1, false])
+  );
   const noteArray = new Array(9).fill(0).map(() => new Array(9).fill(noteObj));
-  const [currentNote, setCurrentNote] = useState<string[][]>(noteArray);
+  const [currentNote, setCurrentNote] =
+    useState<Record<string, boolean>[][]>(noteArray);
   const [isNoteMode, setIsNoteMode] = useState<boolean>(false);
-  const [pressedNum, setPressedNum] = useState<number>(-1);
+  const [pressedNum, setPressedNum] = useState<number | undefined>(undefined);
 
   useEffect(() => {
-    if (!isNoteMode && pressedNum !== -1) {
-      clearNote();
-      handleInputNumber();
-      console.log("Normal\n ----------");
-    } else if (isNoteMode && pressedNum !== -1) {
-      if (pressedNum === 0) {
-        clearNote();
-      } else {
-        handleInputNote();
+    if (pressedNum !== undefined) {
+      switch (pressedNum) {
+        case 0:
+          clearFill();
+          clearNote();
+          break;
+        default:
+          if (!isNoteMode) {
+            clearNote();
+            handleInputNumber();
+            // console.log("Normal\n ------------------");
+          } else {
+            handleInputNote();
+            // console.log("Note\n ------------------");
+          }
       }
-      console.log("Note\n ----------");
     }
-    setPressedNum(-1);
+    setPressedNum(undefined);
   }, [pressedNum]);
 
   const handleInputNumber = () => {
     if (
       selectCell !== undefined &&
-      isForInput[selectCell.row][selectCell.col]
+      isForInput[selectCell.row][selectCell.col] &&
+      pressedNum !== undefined
     ) {
-      const updatedValue = [...currentGrid.map((row) => [...row])];
+      const updatedValue = [...currentFill.map((row) => [...row])];
       updatedValue[selectCell.row][selectCell.col] = pressedNum;
-      setCurrentGrid(updatedValue);
+      setCurrentFill(updatedValue);
       setSelectCell({
         row: selectCell.row,
         col: selectCell.col,
@@ -105,32 +105,20 @@ export function Grid({ data }: GridProps) {
     }
   };
 
-  const clearNote = () => {
-    if (selectCell !== undefined) {
-      const updatedNote: any = [...currentNote.map((row) => [...row])];
-      const updateObject = Object.keys(
-        updatedNote[selectCell.row][selectCell.col]
-      ).reduce((obj, key) => ({ ...obj, [key]: false }), {});
-      updatedNote[selectCell.row][selectCell.col] = updateObject;
-      setCurrentNote(updatedNote);
-      console.log("cleared note");
-    }
-  };
-
   const handleInputNote = () => {
     if (
       selectCell !== undefined &&
       isForInput[selectCell.row][selectCell.col] &&
-      currentGrid[selectCell.row][selectCell.col] === 0
+      currentFill[selectCell.row][selectCell.col] === 0 &&
+      pressedNum !== undefined
     ) {
-      const updatedNote: any = [...currentNote.map((row) => [...row])];
-      const padString: any = pressedNum.toString();
+      const updatedNote = [...currentNote.map((row) => [...row])];
+      const padString = pressedNum.toString();
       updatedNote[selectCell.row][selectCell.col] = {
         ...updatedNote[selectCell.row][selectCell.col],
         [padString]: !currentNote[selectCell.row][selectCell.col][padString],
       };
       setCurrentNote(updatedNote);
-      // }
       // const trueKeys = Object.keys(
       //   updatedNote[selectCell.row][selectCell.col]
       // ).filter(
@@ -142,6 +130,38 @@ export function Grid({ data }: GridProps) {
       // );
     } else {
       console.log("The number already inputed");
+    }
+  };
+
+  const clearNote = () => {
+    if (
+      selectCell !== undefined &&
+      isForInput[selectCell.row][selectCell.col]
+    ) {
+      const updatedNote: any = [...currentNote.map((row) => [...row])];
+      const updateObject = Object.keys(
+        updatedNote[selectCell.row][selectCell.col]
+      ).reduce((obj, key) => ({ ...obj, [key]: false }), {});
+      updatedNote[selectCell.row][selectCell.col] = updateObject;
+      setCurrentNote(updatedNote);
+      // console.log("cleared note");
+    }
+  };
+
+  const clearFill = () => {
+    if (
+      selectCell !== undefined &&
+      isForInput[selectCell.row][selectCell.col]
+    ) {
+      const updateValue = [...currentFill.map((row) => [...row])];
+      updateValue[selectCell.row][selectCell.col] = 0;
+      setCurrentFill(updateValue);
+      setSelectCell({
+        row: selectCell.row,
+        col: selectCell.col,
+        value: 0,
+      });
+      // console.log("clear fill");
     }
   };
 
@@ -172,14 +192,14 @@ export function Grid({ data }: GridProps) {
     () =>
       Gesture.Pan()
         .onBegin(({ x, y }: Coordinates) => {
-          const value = handleSelection({ x, y }, currentGrid);
+          const value = handleSelection({ x, y }, currentFill);
           setSelectCell(value);
         })
         .onChange(({ x, y }: Coordinates) => {
-          const value = handleSelection({ x, y }, currentGrid);
+          const value = handleSelection({ x, y }, currentFill);
           setSelectCell(value);
         }),
-    [selectCell, handleSelection, currentGrid]
+    [selectCell, handleSelection, currentFill]
   );
 
   const onLayout = useCallback(
@@ -192,7 +212,6 @@ export function Grid({ data }: GridProps) {
   );
 
   const getLineStyle = (index: number, isHorizontal: boolean) => {
-    // console.log("here")
     const linePattern = {
       isStartLine: index === 0,
       isTillEndLine: (index + 1) % 3 === 0,
@@ -204,7 +223,8 @@ export function Grid({ data }: GridProps) {
         linePattern.isStartLine ? 3 : undefined,
     };
     return lineStyle;
-  };
+  }
+
   const getCellHilightStyle = (
     select: { row: number; col: number; value: number } | undefined,
     index: number,
@@ -223,12 +243,16 @@ export function Grid({ data }: GridProps) {
         isDupVH:
           (select.value === cell && cell !== 0 && select.row === index) ||
           (select.value === cell && cell !== 0 && select.col === colIndex),
-        // isDupBlock
+        isDupBlock:
+          Math.floor(select.row / 3) === Math.floor(index / 3) &&
+          Math.floor(select.col / 3) === Math.floor(colIndex / 3) &&
+          select.value === cell &&
+          cell !== 0,
       };
       const hilightStyle = {
         backgroundColor: hilightPattern.isCurrCell
           ? "#044289"
-          : hilightPattern.isDupVH
+          : hilightPattern.isDupVH || hilightPattern.isDupBlock
           ? "#522522"
           : hilightPattern.isCurrRow ||
             hilightPattern.isCurrCol ||
@@ -268,7 +292,7 @@ export function Grid({ data }: GridProps) {
         <GestureDetector gesture={gesture}>
           <FlatList
             style={styles.table}
-            data={currentGrid}
+            data={currentFill}
             keyExtractor={(_, i) => i.toString()}
             scrollEnabled={false}
             renderItem={({ item, index }) => {
@@ -306,40 +330,13 @@ export function Grid({ data }: GridProps) {
             }}
           />
         </GestureDetector>
-        {/* <View style={{ flexDirection: "row" }}>
-        <TouchableOpacity
-          style={styles.testButton}
-          onPress={() => {
-            const deepCopy = puzzle.map((row) => [...row]);
-            setCurrentGrid(deepCopy);
-          }}
-        >
-          <Text>Reset</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.testButton}
-          onPress={() => {
-            const deepCopy = solution.map((row) => [...row]);
-            setCurrentGrid(deepCopy);
-          }}
-        >
-          <Text>Solution</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.testButton}
-          onPress={() => {
-            console.log("curr:", currentGrid[8]);
-          }}
-        >
-          <Text>Print</Text>
-        </TouchableOpacity>
-      </View> */}
-        <NumPad
-          setPad={setPressedNum}
-          isNoteMode={isNoteMode}
-          handleNoteModeToggle={handleNoteModeToggle}
-        />
+      <NoteGrid currentNote={currentNote} cellSide={CELL_SIDE} />
       </View>
+      <NumPad
+        setPad={setPressedNum}
+        isNoteMode={isNoteMode}
+        handleNoteModeToggle={handleNoteModeToggle}
+      />
     </>
   ); //
 }
@@ -356,8 +353,8 @@ const styles = StyleSheet.create({
     // position: 'absolute'
   },
   cell: {
-    height: CELL_HEIGHT,
-    width: CELL_WIDTH,
+    height: CELL_SIDE,
+    width: CELL_SIDE,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#262626",
