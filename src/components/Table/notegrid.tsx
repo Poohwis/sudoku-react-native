@@ -1,5 +1,5 @@
 import { memo, useCallback, useRef, useState } from "react";
-import { View, Text, FlatList, StyleSheet } from "react-native";
+import { View, Text, FlatList, StyleSheet, Dimensions } from "react-native";
 interface NoteGridComponentProps {
   currentNote: Record<string, boolean>[][];
   cellSide: number;
@@ -8,9 +8,8 @@ interface InGridNumber {
   data: Record<string, boolean>;
   cellSide: number;
 }
-
 const InGridNumber = memo(({ data, cellSide }: InGridNumber) => {
-  console.log("Ingrid called");
+  // console.log("Ingrid called");
   const numbers = [
     [1, 2, 3],
     [4, 5, 6],
@@ -58,44 +57,47 @@ const InGridNumber = memo(({ data, cellSide }: InGridNumber) => {
 function NoteGridComponent({ currentNote, cellSide }: NoteGridComponentProps) {
   console.log("re-rendered: NoteGrid");
   return (
-    <FlatList
-      style={styles.noteTable}
-      data={currentNote}
-      keyExtractor={(_, i) => i.toString()}
-      scrollEnabled={false}
-      renderItem={({ item, index }) => {
-        // console.log(index)
-        return (
-          <View key={index} style={styles.row}>
-            {item.map((cell, colIndex) => {
-              return (
-                <View
-                  pointerEvents="none"
-                  key={colIndex}
-                  style={[
-                    styles.noteCell,
-                    { width: cellSide, height: cellSide },
-                  ]}
-                >
-                  <InGridNumber data={cell} cellSide={cellSide} />
-                </View>
-              );
-            })}
-          </View>
-        );
-      }}
-    />
+      <FlatList
+        style={styles.noteTable}
+        data={currentNote}
+        keyExtractor={(_, i) => i.toString()}
+        scrollEnabled={false}
+        renderItem={({ item, index }) => {
+          // console.log(index)
+          return (
+            <View key={index} style={styles.row}>
+              {item.map((cell, colIndex) => {
+                return (
+                  <View
+                    pointerEvents="none"
+                    key={colIndex}
+                    style={[
+                      styles.noteCell,
+                      { width: cellSide, height: cellSide },
+                    ]}
+                  >
+                    <InGridNumber data={cell} cellSide={cellSide} />
+                  </View>
+                );
+              })}
+            </View>
+          );
+        }}
+      />
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+  },
   row: {
     flexDirection: "row",
   },
   noteTable: {
     flexGrow: 0,
     position: "absolute",
-    // zIndex: -1,
+    // backgroundColor: "red",
+    // zIndex: 1,
   },
   noteCell: {
     // borderWidth: 3,

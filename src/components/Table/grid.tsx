@@ -17,6 +17,8 @@ import {
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { NumPad } from "./numpad";
 import { NoteGrid } from "./notegrid";
+import { FrontPlane } from "./frontplane";
+
 
 interface CellSize {
   height: number;
@@ -42,30 +44,31 @@ interface Storage {
 
 interface GridProps {
   data: Storage;
+  isNoteMode: boolean;
+  pressedNum: number | undefined;
+  setPressedNum: (num: number | undefined) => void;
+  cellSide: number;
+  currentNote: Record<string, boolean>[][];
+  setCurrentNote: (data: Record<string, boolean>[][]) => void;
+  isEasyMode: boolean;
 }
 
-const TABLE_COLUMNS = 9;
-const { width: SCREEN_WIDTH } = Dimensions.get("screen");
-const CELL_RATIO = 0.99;
-export const CELL_SIDE = Math.floor(
-  (SCREEN_WIDTH / TABLE_COLUMNS) * CELL_RATIO
-);
-
-export function Grid({ data }: GridProps) {
+export function Grid({
+  data,
+  isNoteMode,
+  pressedNum,
+  setPressedNum,
+  cellSide,
+  currentNote,
+  setCurrentNote,
+  isEasyMode,
+}: GridProps) {
   const { puzzle, solution } = data;
   const cellSize = useRef<CellSize>();
   const initialGrid = [...puzzle.map((row) => [...row])];
   const isForInput = initialGrid.map((row) => row.map((cell) => cell === 0));
   const [currentFill, setCurrentFill] = useState<number[][]>(initialGrid);
   const [selectCell, setSelectCell] = useState<SelectCell>();
-  const noteObj = Object.fromEntries(
-    Array.from({ length: 9 }, (_, index) => [index + 1, false])
-  );
-  const noteArray = new Array(9).fill(0).map(() => new Array(9).fill(noteObj));
-  const [currentNote, setCurrentNote] =
-    useState<Record<string, boolean>[][]>(noteArray);
-  const [isNoteMode, setIsNoteMode] = useState<boolean>(false);
-  const [pressedNum, setPressedNum] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (pressedNum !== undefined) {
@@ -165,10 +168,6 @@ export function Grid({ data }: GridProps) {
     }
   };
 
-  const handleNoteModeToggle = useCallback(() => {
-    setIsNoteMode(!isNoteMode);
-  }, [isNoteMode]);
-
   const handleSelection = useCallback(
     ({ x, y }: Coordinates, currentValue: number[][]) => {
       if (!cellSize.current) {
@@ -223,7 +222,7 @@ export function Grid({ data }: GridProps) {
         linePattern.isStartLine ? 3 : undefined,
     };
     return lineStyle;
-  }
+  };
 
   const getCellHilightStyle = (
     select: { row: number; col: number; value: number } | undefined,
@@ -278,66 +277,60 @@ export function Grid({ data }: GridProps) {
     };
     const textStyle = {
       color: textPattern.isFixNumber
-        ? // ? textPattern.isValid
-          "lightblue"
-        : // : "red"
-          "#979797",
+        ? textPattern.isValid
+          ? "lightblue"
+          : isEasyMode
+          ? "red"
+          : "#979797"
+        : "#979797",
     };
     return textStyle;
   };
 
   return (
-    <>
-      <View style={styles.container}>
-        <GestureDetector gesture={gesture}>
-          <FlatList
-            style={styles.table}
-            data={currentFill}
-            keyExtractor={(_, i) => i.toString()}
-            scrollEnabled={false}
-            renderItem={({ item, index }) => {
-              return (
-                <View onLayout={onLayout} style={{ flexDirection: "row" }}>
-                  {item.map((cell, colIndex) => {
-                    return (
-                      <View
-                        key={index.toString() + colIndex.toString()}
+    <View style={styles.container}>
+      <NoteGrid currentNote={currentNote} cellSide={cellSide} />
+      <GestureDetector gesture={gesture}>
+        <FrontPlane cellSide={cellSide} />
+      </GestureDetector>
+      {/* <GestureDetector gesture={gesture}> */}
+        <FlatList
+          style={styles.table}
+          data={currentFill}
+          keyExtractor={(_, i) => i.toString()}
+          scrollEnabled={false}
+          renderItem={({ item, index }) => {
+            return (
+              <View onLayout={onLayout} style={{ flexDirection: "row" }}>
+                {item.map((cell, colIndex) => {
+                  return (
+                    <View
+                      key={index.toString() + colIndex.toString()}
+                      style={[
+                        styles.cell,
+                        { height: cellSide, width: cellSide },
+                        getLineStyle(index, true),
+                        getLineStyle(colIndex, false),
+                        getCellHilightStyle(selectCell, index, colIndex, cell),
+                      ]}
+                    >
+                      <Text
                         style={[
-                          styles.cell,
-                          getLineStyle(index, true),
-                          getLineStyle(colIndex, false),
-                          getCellHilightStyle(
-                            selectCell,
-                            index,
-                            colIndex,
-                            cell
-                          ),
+                          styles.numberText,
+                          getNumberTextStyle(index, colIndex, cell),
                         ]}
                       >
-                        <Text
-                          style={[
-                            styles.numberText,
-                            getNumberTextStyle(index, colIndex, cell),
-                          ]}
-                        >
-                          {cell === 0 ? "" : cell}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              );
-            }}
-          />
-        </GestureDetector>
-      <NoteGrid currentNote={currentNote} cellSide={CELL_SIDE} />
-      </View>
-      <NumPad
-        setPad={setPressedNum}
-        isNoteMode={isNoteMode}
-        handleNoteModeToggle={handleNoteModeToggle}
-      />
-    </>
+                        {cell === 0 ? "" : cell}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            );
+          }}
+        />
+      {/* </GestureDetector> */}
+    </View>
   ); //
 }
 
@@ -350,11 +343,9 @@ const styles = StyleSheet.create({
   },
   table: {
     flexGrow: 0,
-    // position: 'absolute'
+    zIndex: -1,
   },
   cell: {
-    height: CELL_SIDE,
-    width: CELL_SIDE,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#262626",

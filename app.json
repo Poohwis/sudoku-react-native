@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "gesture-handler-selection",
-    "slug": "gesture-handler-selection",
+    "name": "sudoku-rn-expo-app",
+    "slug": "sudoku-rn-expo-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -19,14 +19,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.federicobalzi.gesturehandlerselection"
+      "bundleIdentifier": "com.poohwis.sudoku"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.federicobalzi.gesturehandlerselection"
+      "package": "com.poohwis.sudoku"
     },
     "web": {
       "favicon": "./assets/favicon.png"
