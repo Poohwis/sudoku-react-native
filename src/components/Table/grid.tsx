@@ -19,7 +19,6 @@ import { NumPad } from "./numpad";
 import { NoteGrid } from "./notegrid";
 import { FrontPlane } from "./frontplane";
 
-
 interface CellSize {
   height: number;
   width: number;
@@ -53,6 +52,8 @@ interface GridProps {
   isEasyMode: boolean;
 }
 
+
+
 export function Grid({
   data,
   isNoteMode,
@@ -69,6 +70,10 @@ export function Grid({
   const isForInput = initialGrid.map((row) => row.map((cell) => cell === 0));
   const [currentFill, setCurrentFill] = useState<number[][]>(initialGrid);
   const [selectCell, setSelectCell] = useState<SelectCell>();
+  const [isPressing, setIsPressing] = useState<boolean>(false);
+  const [isModalShow, setIsModalShow] = useState<boolean>(false);
+  const [pressStart, setPressStart] = useState<Coordinates>({ x: 0, y: 0 });
+  const holdingRef = useRef<number>();
 
   useEffect(() => {
     if (pressedNum !== undefined) {
@@ -173,21 +178,19 @@ export function Grid({
       if (!cellSize.current) {
         return;
       }
-
       const cellWidth = cellSize.current.width / 9;
       const cellHeight = cellSize.current.height;
-
       const targetCol = Math.min(Math.max(Math.floor(x / cellWidth), 0), 8);
       const targetRow = Math.min(Math.max(Math.floor(y / cellHeight), 0), 8);
       const cellNumber = currentValue[targetRow][targetCol];
       const result = { row: targetRow, col: targetCol, value: cellNumber };
-
+      // console.log("here")
       return result;
     },
     []
   );
 
-  const gesture = useMemo(
+  const panGesture = useMemo(
     () =>
       Gesture.Pan()
         .onBegin(({ x, y }: Coordinates) => {
@@ -200,6 +203,58 @@ export function Grid({
         }),
     [selectCell, handleSelection, currentFill]
   );
+
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd((_event, success) => {
+      if (success) {
+        console.log("double tap");
+      }
+    });
+
+  const [indicator, setIndicator] = useState<boolean>(false); //temporary
+  const handlePressIn = () => {
+    setIsPressing(true);
+  };
+  const handlePressOut = () => {
+    setIsModalShow(false);
+    setIsPressing(false);
+    clearTimeout(holdingRef.current);
+  };
+
+  const longPressGesture = Gesture.LongPress()
+    .onBegin(({ x, y }) => {
+      setIndicator(true); // temporary
+      handlePressIn();
+      setPressStart({ x, y });
+    })
+    .onTouchesMove(({ allTouches }) => {
+      if (
+        (!isModalShow && Math.abs(pressStart.x - allTouches[0].x) > 10) ||
+        Math.abs(pressStart.y - allTouches[0].y) > 10
+      ) {
+        handlePressOut();
+      }
+    })
+    .onFinalize((e) => {
+      setIndicator(false);
+      handlePressOut();
+    });
+
+  const taps = Gesture.Race(
+    Gesture.Exclusive(panGesture, longPressGesture),
+    doubleTapGesture
+  );
+
+  useEffect(() => {
+    console.log(isPressing, "\n---------------");
+    holdingRef.current = window.setTimeout(() => {
+      if (isPressing) {
+        console.log("pop");
+        setIsModalShow(true);
+      }
+    }, 1000);
+  }, [isPressing]);
 
   const onLayout = useCallback(
     (event: LayoutChangeEvent) =>
@@ -281,7 +336,7 @@ export function Grid({
           ? "lightblue"
           : isEasyMode
           ? "red"
-          : "#979797"
+          : "lightblue"
         : "#979797",
     };
     return textStyle;
@@ -290,46 +345,66 @@ export function Grid({
   return (
     <View style={styles.container}>
       <NoteGrid currentNote={currentNote} cellSide={cellSide} />
-      <GestureDetector gesture={gesture}>
+      <GestureDetector gesture={taps}>
         <FrontPlane cellSide={cellSide} />
       </GestureDetector>
-      {/* <GestureDetector gesture={gesture}> */}
-        <FlatList
-          style={styles.table}
-          data={currentFill}
-          keyExtractor={(_, i) => i.toString()}
-          scrollEnabled={false}
-          renderItem={({ item, index }) => {
-            return (
-              <View onLayout={onLayout} style={{ flexDirection: "row" }}>
-                {item.map((cell, colIndex) => {
-                  return (
-                    <View
-                      key={index.toString() + colIndex.toString()}
+      {isModalShow ? (
+        <View
+          style={{
+            backgroundColor: "red",
+            width: cellSide * 3.5,
+            height: cellSide * 3.5,
+            position: "absolute",
+          }}
+        ></View>
+      ) : null}
+      <View
+        style={{
+          backgroundColor: indicator ? "green" : "red",
+          position: "absolute",
+          width: cellSide,
+          height: cellSide,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ fontSize: 8 }}>{indicator ? "hold" : "release"}</Text>
+      </View>
+      <FlatList
+        style={styles.table}
+        data={currentFill}
+        keyExtractor={(_, i) => i.toString()}
+        scrollEnabled={false}
+        renderItem={({ item, index }) => {
+          return (
+            <View onLayout={onLayout} style={{ flexDirection: "row" }}>
+              {item.map((cell, colIndex) => {
+                return (
+                  <View
+                    key={index.toString() + colIndex.toString()}
+                    style={[
+                      styles.cell,
+                      { height: cellSide, width: cellSide },
+                      getLineStyle(index, true),
+                      getLineStyle(colIndex, false),
+                      getCellHilightStyle(selectCell, index, colIndex, cell),
+                    ]}
+                  >
+                    <Text
                       style={[
-                        styles.cell,
-                        { height: cellSide, width: cellSide },
-                        getLineStyle(index, true),
-                        getLineStyle(colIndex, false),
-                        getCellHilightStyle(selectCell, index, colIndex, cell),
+                        styles.numberText,
+                        getNumberTextStyle(index, colIndex, cell),
                       ]}
                     >
-                      <Text
-                        style={[
-                          styles.numberText,
-                          getNumberTextStyle(index, colIndex, cell),
-                        ]}
-                      >
-                        {cell === 0 ? "" : cell}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            );
-          }}
-        />
-      {/* </GestureDetector> */}
+                      {cell === 0 ? "" : cell}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          );
+        }}
+      />
     </View>
   ); //
 }
