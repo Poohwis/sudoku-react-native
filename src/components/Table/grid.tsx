@@ -10,12 +10,12 @@ import {
   LayoutChangeEvent,
   FlatList,
   StyleSheet,
-  Dimensions,
   Text,
+  TouchableOpacity
 } from "react-native";
+import * as Haptics from 'expo-haptics'
 
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { NumPad } from "./numpad";
 import { NoteGrid } from "./notegrid";
 import { FrontPlane } from "./frontplane";
 
@@ -52,8 +52,6 @@ interface GridProps {
   isEasyMode: boolean;
 }
 
-
-
 export function Grid({
   data,
   isNoteMode,
@@ -72,7 +70,7 @@ export function Grid({
   const [selectCell, setSelectCell] = useState<SelectCell>();
   const [isPressing, setIsPressing] = useState<boolean>(false);
   const [isModalShow, setIsModalShow] = useState<boolean>(false);
-  const [pressStart, setPressStart] = useState<Coordinates>({ x: 0, y: 0 });
+  const [longPressLocation, setLongPressLocation] = useState<Coordinates>({ x: 0, y: 0 });
   const holdingRef = useRef<number>();
 
   useEffect(() => {
@@ -95,7 +93,7 @@ export function Grid({
     }
     setPressedNum(undefined);
   }, [pressedNum]);
-
+  
   const handleInputNumber = () => {
     if (
       selectCell !== undefined &&
@@ -212,9 +210,13 @@ export function Grid({
       }
     });
 
-  const [indicator, setIndicator] = useState<boolean>(false); //temporary
-  const handlePressIn = () => {
+  const [indicator, setIndicator] = useState<"hold" | "release" | "move">(
+    "release"
+  ); //temporary
+  const handlePressIn = ({ x, y }: Coordinates) => {
     setIsPressing(true);
+    setLongPressLocation({ x, y });
+    setIndicator("hold"); //temporary
   };
   const handlePressOut = () => {
     setIsModalShow(false);
@@ -223,21 +225,23 @@ export function Grid({
   };
 
   const longPressGesture = Gesture.LongPress()
-    .onBegin(({ x, y }) => {
-      setIndicator(true); // temporary
-      handlePressIn();
-      setPressStart({ x, y });
+    .onBegin(({ x, y }: Coordinates) => {
+      // clearTimeout(holdingRef.current)
+      handlePressIn({ x, y });
+      // setPressStart({ x, y });
     })
     .onTouchesMove(({ allTouches }) => {
       if (
-        (!isModalShow && Math.abs(pressStart.x - allTouches[0].x) > 10) ||
-        Math.abs(pressStart.y - allTouches[0].y) > 10
+        (!isModalShow && Math.abs(longPressLocation.x - allTouches[0].x) > 10) ||
+        Math.abs(longPressLocation.y - allTouches[0].y) > 10
       ) {
+        setIndicator("move");
+        console.log(indicator);
         handlePressOut();
       }
     })
-    .onFinalize((e) => {
-      setIndicator(false);
+    .onFinalize(() => {
+      setIndicator("release");
       handlePressOut();
     });
 
@@ -253,7 +257,7 @@ export function Grid({
         console.log("pop");
         setIsModalShow(true);
       }
-    }, 1000);
+    }, 800);
   }, [isPressing]);
 
   const onLayout = useCallback(
@@ -350,26 +354,39 @@ export function Grid({
       </GestureDetector>
       {isModalShow ? (
         <View
+        onLayout={()=>{
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
+        }}
           style={{
-            backgroundColor: "red",
-            width: cellSide * 3.5,
-            height: cellSide * 3.5,
+            backgroundColor: "#97979799",
+            width: cellSide * 3,
+            height: cellSide * 3,
             position: "absolute",
-          }}
-        ></View>
+            left: longPressLocation.x - (cellSide * 3) /2,
+            top: longPressLocation.y +(cellSide * 3) / 2,
+          justifyContent: 'center', 
+          borderRadius: cellSide * 3,
+        alignItems: 'center'}}
+        ><Text>.</Text></View>
       ) : null}
-      <View
+      <TouchableOpacity
         style={{
-          backgroundColor: indicator ? "green" : "red",
+          backgroundColor:
+            indicator === "hold"
+              ? "green"
+              : indicator === "release"
+              ? "red"
+              : "blue",
           position: "absolute",
           width: cellSide,
           height: cellSide,
           justifyContent: "center",
           alignItems: "center",
+          borderRadius: cellSide
         }}
       >
-        <Text style={{ fontSize: 8 }}>{indicator ? "hold" : "release"}</Text>
-      </View>
+        <Text style={{ fontSize: 8, color: 'white'}}>{indicator.toUpperCase()}</Text>
+      </TouchableOpacity>
       <FlatList
         style={styles.table}
         data={currentFill}
