@@ -12,20 +12,13 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  Platform,
-  Pressable,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { NoteGrid } from "./notegrid";
 import { FrontPlane } from "./frontplane";
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-} from "react-native-reanimated";
-import { withTheme } from "@rneui/themed";
+import Animated, { useSharedValue } from "react-native-reanimated";
 
 interface CellSize {
   height: number;
@@ -60,19 +53,6 @@ interface GridProps {
   isEasyMode: boolean;
 }
 
-interface HapticTypes {
-  type:
-    | "impactHeavy"
-    | "impactMedium"
-    | "impactLight"
-    | "notiSuccess"
-    | "notiError"
-    | "notiWarning"
-    | "selection";
-}
-
-const WHEEL_RATIO = 4;
-
 export function Grid({
   data,
   isNoteMode,
@@ -89,7 +69,13 @@ export function Grid({
   const isForInput = initialGrid.map((row) => row.map((cell) => cell === 0));
   const [currentFill, setCurrentFill] = useState<number[][]>(initialGrid);
   const [selectCell, setSelectCell] = useState<SelectCell>();
-  const WHEEL_SIZE = cellSide * WHEEL_RATIO;
+  const [isPressing, setIsPressing] = useState<boolean>(false);
+  const [isModalShow, setIsModalShow] = useState<boolean>(false);
+  const [longPressLocation, setLongPressLocation] = useState<Coordinates>({
+    x: 0,
+    y: 0,
+  });
+  const holdingRef = useRef<number>();
 
   useEffect(() => {
     if (pressedNum !== undefined) {
@@ -206,12 +192,87 @@ export function Grid({
     []
   );
 
-  const onLayout = useCallback((event: LayoutChangeEvent) => {
-    return event.target.measure(
-      (_: number, __: number, width: number, height: number) =>
-        (cellSize.current = { width, height })
-    );
-  }, []);
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .onBegin(({ x, y }: Coordinates) => {
+          const value = handleSelection({ x, y }, currentFill);
+          setSelectCell(value);
+        })
+        .onChange(({ x, y }: Coordinates) => {
+          const value = handleSelection({ x, y }, currentFill);
+          setSelectCell(value);
+        })
+        .runOnJS(true),
+    [selectCell, handleSelection, currentFill]
+  );
+
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd((_event, success) => {
+      if (success) {
+        console.log("double tap");
+      }
+    });
+
+  const [indicator, setIndicator] = useState<"hold" | "release" | "move">(
+    "release"
+  ); //temporary
+  const handlePressIn = ({ x, y }: Coordinates) => {
+    setIsPressing(true);
+    setLongPressLocation({ x, y });
+    setIndicator("hold"); //temporary
+  };
+  const handlePressOut = () => {
+    setIsModalShow(false);
+    setIsPressing(false);
+    clearTimeout(holdingRef.current);
+  };
+
+  const longPressGesture = Gesture.LongPress()
+    .onBegin(({ x, y }: Coordinates) => {
+      handlePressIn({ x, y });
+    })
+    .onTouchesMove(({ allTouches }) => {
+      if (
+        (!isModalShow &&
+          Math.abs(longPressLocation.x - allTouches[0].x) > 10) ||
+        Math.abs(longPressLocation.y - allTouches[0].y) > 10
+      ) {
+        setIndicator("move");
+        console.log(indicator);
+        handlePressOut();
+      }
+    })
+    .onFinalize(() => {
+      setIndicator("release");
+      handlePressOut();
+    })
+    .runOnJS(true);
+
+  const taps = Gesture.Race(
+    Gesture.Exclusive(panGesture, longPressGesture),
+    doubleTapGesture
+  );
+
+  useEffect(() => {
+    console.log(isPressing, "\n---------------");
+    holdingRef.current = window.setTimeout(() => {
+      if (isPressing) {
+        console.log("pop");
+        setIsModalShow(true);
+      }
+    }, 800);
+  }, [isPressing]);
+
+  const onLayout = useCallback(
+    (event: LayoutChangeEvent) =>
+      event.target.measure(
+        (_: number, __: number, width: number, height: number) =>
+          (cellSize.current = { width, height })
+      ),
+    []
+  );
 
   const getLineStyle = (index: number, isHorizontal: boolean) => {
     const linePattern = {
@@ -290,131 +351,50 @@ export function Grid({
     return textStyle;
   };
 
-  const panGesture = useMemo(() => {
-    return Gesture.Pan()
-      .onBegin(({ x, y }: Coordinates) => {
-        const value = handleSelection({ x, y }, currentFill);
-        setSelectCell(value);
-      })
-      .onChange(({ x, y }: Coordinates) => {
-        const value = handleSelection({ x, y }, currentFill);
-        setSelectCell(value);
-      })
-      .runOnJS(true);
-  }, [selectCell, handleSelection, currentFill]);
-
-  const haptics = (e: HapticTypes) => {
-    switch (e.type) {
-      case "impactHeavy":
-        return Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      case "impactMedium":
-        return Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      case "impactLight":
-        return Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      case "notiSuccess":
-        return Haptics.notificationAsync(
-          Haptics.NotificationFeedbackType.Success
-        );
-      case "notiError":
-        return Haptics.notificationAsync(
-          Haptics.NotificationFeedbackType.Error
-        );
-      case "notiWarning":
-        return Haptics.notificationAsync(
-          Haptics.NotificationFeedbackType.Warning
-        );
-      case "selection":
-        return Haptics.selectionAsync();
-      default:
-        throw new Error(`Unsupported haptics type: ${e.type}`);
-    }
-  };
-
-  const pressed = useSharedValue<"hold" | "released" | "pop">("released");
-  const [isWheelOpen, setIsWheelOpen] = useState<boolean>(false);
-  const wheelLocationX = useSharedValue<number>(0);
-  const wheelLocationY = useSharedValue<number>(0);
-
-  const animatedStyles = useAnimatedStyle(() => ({
-    backgroundColor:
-      pressed.value === "hold"
-        ? "#00ff0099"
-        : pressed.value === "released"
-        ? "#ff000099"
-        : // : pressed.value === "pop"
-          "#ff00ff99",
-    // : "#0000ff99",
-    left: wheelLocationX.value,
-    top: wheelLocationY.value + (Platform.OS === "ios" ? 30 : 0),
-    //this is problem (and i don't know the cause why the overlap happen yet) and need to be fix, for now just for visual
-  }));
-
-  const handleToggleWheel = () => {
-    setIsWheelOpen(!isWheelOpen);
-  };
-
-  const tapGesture = Gesture.Tap()
-    .maxDuration(800)
-    .maxDistance(cellSide)
-    .onBegin(({ x: locationX, y: locationY }: Coordinates) => {
-      wheelLocationX.value =
-        Math.floor(locationX / cellSide) * cellSide -
-        WHEEL_SIZE / 2 +
-        cellSide / 2 +
-        3; //addition for borderline width
-      wheelLocationY.value =
-        Math.floor(locationY / cellSide) * cellSide +
-        WHEEL_SIZE / 2 -
-        cellSide / 2 +
-        3; //addition for borderline width
-      pressed.value = "hold";
-    })
-    .onFinalize((event) => {
-      if (Platform.OS === "ios") {
-        if (pressed.value == "hold" && event.numberOfPointers === 1) {
-          pressed.value = "pop";
-          runOnJS(haptics)({ type: "impactHeavy" });
-          runOnJS(handleToggleWheel)();
-        } else {
-          pressed.value = "released";
-        }
-      } else {
-        if (pressed.value == "hold" && event.state === 1) {
-          pressed.value = "pop";
-          runOnJS(handleToggleWheel)();
-        } else {
-          pressed.value = "released";
-        }
-      }
-    })
-    .onEnd(() => {
-      pressed.value = "released";
-    });
-
-  const taps = Gesture.Exclusive(panGesture, tapGesture);
-
   return (
     <View style={styles.container}>
       <NoteGrid currentNote={currentNote} cellSide={cellSide} />
       <GestureDetector gesture={taps}>
         <FrontPlane cellSide={cellSide} />
       </GestureDetector>
-      {isWheelOpen && (
-        <>
-          <Pressable style={styles.backdrop} onPress={handleToggleWheel} />
-          <Animated.View
-            style={[
-              {
-                height: WHEEL_SIZE,
-                width: WHEEL_SIZE,
-                borderRadius: WHEEL_SIZE / 2,
-                position: "absolute",
-              },
-              animatedStyles,
-            ]}
-          />
-        </>
-      )}
+      {isModalShow ? (
+        <View
+          onLayout={() =>
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
+          }
+          style={{
+            backgroundColor: "#97979799",
+            width: cellSide * 3,
+            height: cellSide * 3,
+            position: "absolute",
+            justifyContent: "center",
+            borderRadius: cellSide * 3,
+            alignItems: "center",
+          }}
+        >
+          <Text>.</Text>
+        </View>
+      ) : null}
+      <TouchableOpacity
+        style={{
+          backgroundColor:
+            indicator === "hold"
+              ? "green"
+              : indicator === "release"
+              ? "red"
+              : "blue",
+          position: "absolute",
+          width: cellSide,
+          height: cellSide,
+          justifyContent: "center",
+          alignItems: "center",
+          borderRadius: cellSide,
+        }}
+      >
+        <Text style={{ fontSize: 8, color: "white" }}>
+          {indicator.toString()}
+        </Text>
+      </TouchableOpacity>
       <FlatList
         style={styles.table}
         data={currentFill}
@@ -480,9 +460,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     backgroundColor: "white",
     borderRadius: 8,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.2)",
   },
 });
