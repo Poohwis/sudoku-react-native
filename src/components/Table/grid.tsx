@@ -16,16 +16,21 @@ import {
   Pressable,
 } from "react-native";
 import * as Haptics from "expo-haptics";
+import { BlurView } from "expo-blur";
 
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { NoteGrid } from "./notegrid";
 import { FrontPlane } from "./frontplane";
 import Animated, {
+  FadeIn,
+  FadeOut,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
-import { withTheme } from "@rneui/themed";
+import DialWheel from "./dialWheel";
+import { haptics } from "../../misc/haptics";
+import { GRID_LAYOUT } from "../../misc/gridLayout";
 
 interface CellSize {
   height: number;
@@ -54,42 +59,35 @@ interface GridProps {
   isNoteMode: boolean;
   pressedNum: number | undefined;
   setPressedNum: (num: number | undefined) => void;
-  cellSide: number;
+  cellSize: number;
   currentNote: Record<string, boolean>[][];
   setCurrentNote: (data: Record<string, boolean>[][]) => void;
   isEasyMode: boolean;
 }
 
-interface HapticTypes {
-  type:
-    | "impactHeavy"
-    | "impactMedium"
-    | "impactLight"
-    | "notiSuccess"
-    | "notiError"
-    | "notiWarning"
-    | "selection";
-}
-
-const WHEEL_RATIO = 4;
+const WHEEL_RATIO = 3.25;
 
 export function Grid({
   data,
   isNoteMode,
   pressedNum,
   setPressedNum,
-  cellSide,
+  cellSize,
   currentNote,
   setCurrentNote,
   isEasyMode,
 }: GridProps) {
   const { puzzle, solution } = data;
-  const cellSize = useRef<CellSize>();
+  const measuredCellSize = useRef<CellSize>();
   const initialGrid = [...puzzle.map((row) => [...row])];
   const isForInput = initialGrid.map((row) => row.map((cell) => cell === 0));
   const [currentFill, setCurrentFill] = useState<number[][]>(initialGrid);
   const [selectCell, setSelectCell] = useState<SelectCell>();
-  const WHEEL_SIZE = cellSide * WHEEL_RATIO;
+  const WHEEL_SIZE = cellSize * WHEEL_RATIO;
+  const [isWheelActive, setIsWheelOpen] = useState<boolean>(false);
+  const buttonPositionRef = useRef<Record<string, number>[]>(
+    Array(9).fill({ x: 0, y: 0 })
+  );
 
   useEffect(() => {
     if (pressedNum !== undefined) {
@@ -191,11 +189,11 @@ export function Grid({
 
   const handleSelection = useCallback(
     ({ x, y }: Coordinates, currentValue: number[][]) => {
-      if (!cellSize.current) {
+      if (!measuredCellSize.current) {
         return;
       }
-      const cellWidth = cellSize.current.width / 9;
-      const cellHeight = cellSize.current.height;
+      const cellWidth = measuredCellSize.current.width / 9;
+      const cellHeight = measuredCellSize.current.height;
       const targetCol = Math.min(Math.max(Math.floor(x / cellWidth), 0), 8);
       const targetRow = Math.min(Math.max(Math.floor(y / cellHeight), 0), 8);
       const cellNumber = currentValue[targetRow][targetCol];
@@ -209,7 +207,7 @@ export function Grid({
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     return event.target.measure(
       (_: number, __: number, width: number, height: number) =>
-        (cellSize.current = { width, height })
+        (measuredCellSize.current = { width, height })
     );
   }, []);
 
@@ -220,9 +218,11 @@ export function Grid({
     };
     const lineStyle = {
       [isHorizontal ? "borderBottomWidth" : "borderRightWidth"]:
-        linePattern.isTillEndLine ? 3 : 0.8,
+        linePattern.isTillEndLine
+          ? GRID_LAYOUT.borderBold
+          : GRID_LAYOUT.borderThin,
       [isHorizontal ? "borderTopWidth" : "borderLeftWidth"]:
-        linePattern.isStartLine ? 3 : undefined,
+        linePattern.isStartLine ? GRID_LAYOUT.borderBold : undefined,
     };
     return lineStyle;
   };
@@ -292,6 +292,7 @@ export function Grid({
 
   const panGesture = useMemo(() => {
     return Gesture.Pan()
+      .enabled(!isWheelActive)
       .onBegin(({ x, y }: Coordinates) => {
         const value = handleSelection({ x, y }, currentFill);
         setSelectCell(value);
@@ -301,120 +302,87 @@ export function Grid({
         setSelectCell(value);
       })
       .runOnJS(true);
-  }, [selectCell, handleSelection, currentFill]);
+  }, [selectCell, handleSelection, currentFill, isWheelActive]);
 
-  const haptics = (e: HapticTypes) => {
-    switch (e.type) {
-      case "impactHeavy":
-        return Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      case "impactMedium":
-        return Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      case "impactLight":
-        return Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      case "notiSuccess":
-        return Haptics.notificationAsync(
-          Haptics.NotificationFeedbackType.Success
-        );
-      case "notiError":
-        return Haptics.notificationAsync(
-          Haptics.NotificationFeedbackType.Error
-        );
-      case "notiWarning":
-        return Haptics.notificationAsync(
-          Haptics.NotificationFeedbackType.Warning
-        );
-      case "selection":
-        return Haptics.selectionAsync();
-      default:
-        throw new Error(`Unsupported haptics type: ${e.type}`);
-    }
-  };
-
-  const pressed = useSharedValue<"hold" | "released" | "pop">("released");
-  const [isWheelOpen, setIsWheelOpen] = useState<boolean>(false);
+  const pressed = useSharedValue<boolean>(false);
   const wheelLocationX = useSharedValue<number>(0);
   const wheelLocationY = useSharedValue<number>(0);
 
-  const animatedStyles = useAnimatedStyle(() => ({
-    backgroundColor:
-      pressed.value === "hold"
-        ? "#00ff0099"
-        : pressed.value === "released"
-        ? "#ff000099"
-        : // : pressed.value === "pop"
-          "#ff00ff99",
-    // : "#0000ff99",
-    left: wheelLocationX.value,
-    top: wheelLocationY.value + (Platform.OS === "ios" ? 30 : 0),
-    //this is problem (and i don't know the cause why the overlap happen yet) and need to be fix, for now just for visual
-  }));
-
   const handleToggleWheel = () => {
-    setIsWheelOpen(!isWheelOpen);
+    setIsWheelOpen(!isWheelActive);
   };
 
   const tapGesture = Gesture.Tap()
     .maxDuration(800)
-    .maxDistance(cellSide)
+    .maxDistance(cellSize)
+    .enabled(!isWheelActive)
     .onBegin(({ x: locationX, y: locationY }: Coordinates) => {
-      wheelLocationX.value =
-        Math.floor(locationX / cellSide) * cellSide -
-        WHEEL_SIZE / 2 +
-        cellSide / 2 +
-        3; //addition for borderline width
-      wheelLocationY.value =
-        Math.floor(locationY / cellSide) * cellSide +
-        WHEEL_SIZE / 2 -
-        cellSide / 2 +
-        3; //addition for borderline width
-      pressed.value = "hold";
+      wheelLocationX.value = locationX;
+      wheelLocationY.value = locationY;
+      pressed.value = true;
     })
     .onFinalize((event) => {
       if (Platform.OS === "ios") {
-        if (pressed.value == "hold" && event.numberOfPointers === 1) {
-          pressed.value = "pop";
+        if (pressed.value == true && event.numberOfPointers === 1) {
+          pressed.value = true;
           runOnJS(haptics)({ type: "impactHeavy" });
           runOnJS(handleToggleWheel)();
         } else {
-          pressed.value = "released";
+          pressed.value = false;
         }
       } else {
-        if (pressed.value == "hold" && event.state === 1) {
-          pressed.value = "pop";
+        if (pressed.value == true && event.state === 1) {
+          pressed.value = true;
           runOnJS(handleToggleWheel)();
         } else {
-          pressed.value = "released";
+          pressed.value = false;
         }
       }
     })
     .onEnd(() => {
-      pressed.value = "released";
+      pressed.value = false;
     });
 
-  const taps = Gesture.Exclusive(panGesture, tapGesture);
+  const [temp, setTemp] = useState()
+  const newPan = Gesture.Pan().runOnJS(true)
+    .onBegin((e) => {
+      console.log("onBegin");
+    })
+    .onChange((e) => {
+      const touchedNum = buttonPositionRef.current.find((item,index)=>{
+        
+      const dx = e.x - item.x;
+      const dy = e.y - item.y;
+      const result = Math.sqrt(dx * dx + dy * dy) < (cellSize /2);
+      if (result){
+
+      console.log(index)
+      }
+      })
+    })
+    .onFinalize((e) => console.log("onFinalize"));
+
+  const taps = Gesture.Exclusive(panGesture, tapGesture, newPan);
 
   return (
     <View style={styles.container}>
-      <NoteGrid currentNote={currentNote} cellSide={cellSide} />
+      <NoteGrid currentNote={currentNote} cellSide={cellSize} />
       <GestureDetector gesture={taps}>
-        <FrontPlane cellSide={cellSide} />
-      </GestureDetector>
-      {isWheelOpen && (
         <>
-          <Pressable style={styles.backdrop} onPress={handleToggleWheel} />
-          <Animated.View
-            style={[
-              {
-                height: WHEEL_SIZE,
-                width: WHEEL_SIZE,
-                borderRadius: WHEEL_SIZE / 2,
-                position: "absolute",
-              },
-              animatedStyles,
-            ]}
-          />
+          <FrontPlane cellSide={cellSize} />
+          {isWheelActive && (
+            <DialWheel
+              buttonPositionRef={buttonPositionRef}
+              pressed={pressed}
+              wheelLocationX={wheelLocationX}
+              wheelLocationY={wheelLocationY}
+              handleToggleWheel={handleToggleWheel}
+              wheelSize={WHEEL_SIZE}
+              cellSide={cellSize}
+            />
+          )}
         </>
-      )}
+      </GestureDetector>
       <FlatList
         style={styles.table}
         data={currentFill}
@@ -429,10 +397,11 @@ export function Grid({
                     key={index.toString() + colIndex.toString()}
                     style={[
                       styles.cell,
-                      { height: cellSide, width: cellSide },
+                      { height: cellSize, width: cellSize },
                       getLineStyle(index, true),
                       getLineStyle(colIndex, false),
                       getCellHilightStyle(selectCell, index, colIndex, cell),
+                      //this need to be fix!!
                     ]}
                   >
                     <Text
@@ -483,6 +452,6 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.2)",
+    // backgroundColor: "rgba(0,0,0,0.2)",
   },
 });

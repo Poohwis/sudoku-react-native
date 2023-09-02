@@ -1,5 +1,5 @@
 import {memo} from 'react'
-import { View, FlatList, StyleSheet, Text } from "react-native";
+import { View, FlatList, StyleSheet} from "react-native";
 interface FrontPlaneComponentProps {
   cellSide: number;
 }

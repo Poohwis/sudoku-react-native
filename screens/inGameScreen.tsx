@@ -12,7 +12,7 @@ type Props = NativeStackScreenProps<RootStackParams, "InGame">;
 
 const { width: SCREEN_WIDTH } = Dimensions.get("screen");
 const CELL_RATIO = 0.99;
-const CELL_SIDE = Math.floor((SCREEN_WIDTH / 9) * CELL_RATIO);
+const CELL_SIZE = Math.floor((SCREEN_WIDTH / 9) * CELL_RATIO);
 
 export default function InGameScreen({ route }: Props) {
   const variation: number = route.params.variation;
@@ -25,6 +25,7 @@ export default function InGameScreen({ route }: Props) {
   const noteObj = Object.fromEntries(
     Array.from({ length: 9 }, (_, index) => [index + 1, false])
   );
+
   const noteArray = new Array(9).fill(0).map(() => new Array(9).fill(noteObj));
   const [currentNote, setCurrentNote] =
     useState<Record<string, boolean>[][]>(noteArray);
@@ -45,19 +46,19 @@ export default function InGameScreen({ route }: Props) {
           isNoteMode={isNoteMode}
           pressedNum={pressedNum}
           setPressedNum={setPressedNum}
-          cellSide={CELL_SIDE}
+          cellSize={CELL_SIZE}
           currentNote={currentNote}
           setCurrentNote={setCurrentNote}
           isEasyMode={isEasyMode}
         />
       </GestureHandlerRootView>
-      <NumPad
+      {/* <NumPad
         isNoteMode={isNoteMode}
         handleNoteModeToggle={handleNoteModeToggle}
         setPressedNum={setPressedNum}
         isEasyMode={isEasyMode}
         handleEasyModeToggle={handleEasyModeToggle}
-      />
+      /> */}
     </>
   );
 }
